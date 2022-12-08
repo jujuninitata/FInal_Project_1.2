@@ -1,6 +1,7 @@
 const db = require("./../models");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const nodemailer = require('nodemailer');
 
 const getuser = async (req, res) => {
   try {
@@ -132,12 +133,12 @@ const loginWithGoogle = async (req, res, next) => {
 };
 
 const forgotPassword = async (req, res) => {
-  // const { email } = req.body;
-  // const checkData = await db.user.findOne({ where: { email } });
+  const { email } = req.body;
+  const checkData = await db.user.findOne({ where: { email } });
 
-  // if (!checkData) {
-  //   return res.status(422).json({ message: "email not found!" });
-  // }
+  if (!checkData) {
+    return res.status(422).json({ message: "email not found!" });
+  }
 
   // const token = jwt.sign(
   //   {
@@ -153,27 +154,54 @@ const forgotPassword = async (req, res) => {
   //   }
   // );
 
-  const link = `http://localhost:3000/home`;
-  // const mailOptions = {
-  //   from: "<Test>",
-  //   to: email,
-  //   subject: "Reset Password",
-  //   html: `
+  // generate a new password and hash it
+  const newPassword = Math.random().toString(36).slice(-8);
+  const salt = await bcrypt.genSalt();
+  const passwordHash = await bcrypt.hash(newPassword, salt);
 
-  //     <h1>Reset Password</h1>
-  //     <p>Click this link to reset your password</p>
-  //     <a href="${link}">Reset Password</a>
-  //   `,
-  // };
+  // update the user's password
+  await checkData.update({ 
+    password: passwordHash, 
+  });
 
-  // transporter.sendMail(mailOptions, (err, info) => {
-  //   if (err) {
-  //     console.log(err);
-  //     return res.status(500).json({ message: "Internal Server Error!" });
-  //   }
-  //   return res.status(200).json({ message: "Email sent!" });
-  // });
-  res.redirect(link);
+  // using google app password authentication to send email
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: 'suangga2003@gmail.com',
+      pass: 'pyosflpthucdycrz'
+    }
+  });
+
+  // const link = `http://localhost:3000`;
+  const mailOptions = {
+    from: "suangga2003@gmail.com",
+    to: email,
+    subject: "Reset Password",
+    // html: `
+
+    //   <h1>Reset Password</h1>
+    //   <p>Click this link to reset your password</p>
+    //   <a href="${link}">Reset Password</a>
+    // `,
+    html: `
+        <h1>Reset Password</h1>
+        <p>Your new password is ${newPassword}. You can use this password to log in to your account.</p>
+    `,
+  };
+
+  transporter.sendMail(mailOptions, (err, info) => {
+    if (err) {
+      console.log(err);
+      return res.status(500).json({ message: "Internal Server Error!" });
+    } else {
+      console.log(`Email sent: ${info.response}`);
+    }
+    return res.status(200).json({ message: "Email sent!" });
+  });
+
+  // res.redirect(link);
+  res.json({ msg: 'Password reset successful' });
 };
 
 module.exports = { register, login, getuser, loginWithGoogle, forgotPassword };
